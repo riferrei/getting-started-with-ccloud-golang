@@ -4,6 +4,9 @@
 *.dll
 *.so
 *.dylib
+ProducerApp
+ConsumerApp
+go.sum
 
 # Test binary, built with `go test -c`
 *.test
