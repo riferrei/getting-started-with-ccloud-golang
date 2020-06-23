@@ -57,7 +57,7 @@ func main() {
 	schema, err := schemaRegistryClient.GetLatestSchema(topic, false)
 	if schema == nil {
 		schemaBytes, _ := ioutil.ReadFile(schemaFile)
-		schema, err = schemaRegistryClient.CreateSchema(topic, string(schemaBytes), false)
+		schema, err = schemaRegistryClient.CreateSchema(topic, string(schemaBytes), "PROTOBUF", false)
 		if err != nil {
 			panic(fmt.Sprintf("Error creating the schema %s", err))
 		}
@@ -96,7 +96,11 @@ func main() {
 
 	for {
 
-		deviceSelected := devices[len(devices)-1]
+		choosen := rand.Intn(len(devices))
+		if choosen == 0 {
+			choosen = 1
+		}
+		deviceSelected := devices[choosen-1]
 
 		// Create key and value
 		key := deviceSelected.DeviceID
@@ -122,7 +126,7 @@ func main() {
 			Key: []byte(key), Value: recordValue}, nil)
 
 		// Sleep for one second...
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(1000 * time.Millisecond)
 
 	}
 
