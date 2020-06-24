@@ -12,7 +12,7 @@ import (
 )
 
 // TopicName holds the name of the topic
-const TopicName string = "SensorReading"
+const TopicName string = "SensorReading-Golang"
 
 // PropsFile holds the filename with config
 const PropsFile string = "ccloud.properties"

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/rand"
+	"os"
 	"strings"
 	"time"
 
@@ -14,13 +15,33 @@ import (
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 )
 
+const producerMode string = "producer"
+const consumerMode string = "consumer"
 const schemaFile string = "SensorReading.proto"
 
 func main() {
 
+	clientMode := os.Args[1]
 	props := LoadProperties()
-	CreateTopic(props)
 	topic := TopicName
+
+	if strings.Compare(clientMode, producerMode) == 0 {
+		producer(props, topic)
+	} else if strings.Compare(clientMode, consumerMode) == 0 {
+		consumer(props, topic)
+	} else {
+		fmt.Println("Invalid option. Valid options are 'producer' and 'consumer'.")
+	}
+
+}
+
+/**************************************************/
+/******************** Producer ********************/
+/**************************************************/
+
+func producer(props map[string]string, topic string) {
+
+	CreateTopic(props)
 
 	schemaRegistryClient := srclient.CreateSchemaRegistryClient(props["schema.registry.url"])
 	schemaRegistryClient.CodecCreationEnabled(false)
@@ -114,7 +135,7 @@ func main() {
 		// Serialize the record value
 		schemaIDBytes := make([]byte, 4)
 		binary.BigEndian.PutUint32(schemaIDBytes, uint32(schema.ID()))
-		var recordValue []byte
+		recordValue := []byte{}
 		recordValue = append(recordValue, byte(0))
 		recordValue = append(recordValue, schemaIDBytes...)
 		recordValue = append(recordValue, valueBytes...)
@@ -128,6 +149,57 @@ func main() {
 		// Sleep for one second...
 		time.Sleep(1000 * time.Millisecond)
 
+	}
+
+}
+
+/**************************************************/
+/******************** Consumer ********************/
+/**************************************************/
+
+func consumer(props map[string]string, topic string) {
+
+	CreateTopic(props)
+
+	schemaRegistryClient := srclient.CreateSchemaRegistryClient(props["schema.registry.url"])
+	schemaRegistryClient.CodecCreationEnabled(false)
+	srBasicAuthUserInfo := props["schema.registry.basic.auth.user.info"]
+	credentials := strings.Split(srBasicAuthUserInfo, ":")
+	schemaRegistryClient.SetCredentials(credentials[0], credentials[1])
+
+	consumer, err := kafka.NewConsumer(&kafka.ConfigMap{
+		"bootstrap.servers":  props["bootstrap.servers"],
+		"sasl.mechanisms":    props["sasl.mechanisms"],
+		"security.protocol":  props["security.protocol"],
+		"sasl.username":      props["sasl.username"],
+		"sasl.password":      props["sasl.password"],
+		"session.timeout.ms": 6000,
+		"group.id":           "golang-consumer",
+		"auto.offset.reset":  "latest"})
+	if err != nil {
+		panic(fmt.Sprintf("Failed to create consumer %s", err))
+	}
+	defer consumer.Close()
+
+	consumer.SubscribeTopics([]string{topic}, nil)
+
+	for {
+		record, err := consumer.ReadMessage(-1)
+		if err == nil {
+			// Deserialize the record value using Protobuf encoded bytes
+			sensorReading := &SensorReading{}
+			err = proto.Unmarshal(record.Value[5:], sensorReading)
+			if err != nil {
+				panic(fmt.Sprintf("Error deserializing the record: %s", err))
+			}
+			// Print the record value
+			fmt.Printf("SensorReading[device=%s, dateTime=%d, reading=%f]\n",
+				sensorReading.Device.GetDeviceID(),
+				sensorReading.GetDateTime(),
+				sensorReading.GetReading())
+		} else {
+			fmt.Println(err)
+		}
 	}
 
 }
