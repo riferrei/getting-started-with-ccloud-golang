@@ -132,12 +132,25 @@ func producer(props map[string]string, topic string) {
 		}
 		valueBytes, _ := proto.Marshal(&sensorReading)
 
-		// Serialize the record value
-		schemaIDBytes := make([]byte, 4)
-		binary.BigEndian.PutUint32(schemaIDBytes, uint32(schema.ID()))
 		recordValue := []byte{}
 		recordValue = append(recordValue, byte(0))
+
+		// Technically this is not necessary because in
+		// Go consumers don't need to know the schema to
+		// be able to deserialize records. However, if this
+		// client wants to produce records that could be
+		// deserialized using Java (KafkaProtobufDeserializer)
+		// then it is important to arrange the bytes according
+		// to the format expected there.
+		schemaIDBytes := make([]byte, 4)
+		binary.BigEndian.PutUint32(schemaIDBytes, uint32(schema.ID()))
 		recordValue = append(recordValue, schemaIDBytes...)
+
+		// [Pending] insert the message index list here
+		// before the actual value since it is required
+		// for the Java deserializer. Meanwhile this code
+		// will produce records that can only be read by
+		// Go consumers.
 		recordValue = append(recordValue, valueBytes...)
 
 		// Produce the record to the topic
@@ -161,11 +174,16 @@ func consumer(props map[string]string, topic string) {
 
 	CreateTopic(props)
 
-	schemaRegistryClient := srclient.CreateSchemaRegistryClient(props["schema.registry.url"])
-	schemaRegistryClient.CodecCreationEnabled(false)
-	srBasicAuthUserInfo := props["schema.registry.basic.auth.user.info"]
-	credentials := strings.Split(srBasicAuthUserInfo, ":")
-	schemaRegistryClient.SetCredentials(credentials[0], credentials[1])
+	// Code below has been commented out because currently
+	// Go doesn't need to read the schema in order to be
+	// able to deserialize the record. But keeping the code
+	// here for future use ¯\_(ツ)_/¯
+
+	// schemaRegistryClient := srclient.CreateSchemaRegistryClient(props["schema.registry.url"])
+	// schemaRegistryClient.CodecCreationEnabled(false)
+	// srBasicAuthUserInfo := props["schema.registry.basic.auth.user.info"]
+	// credentials := strings.Split(srBasicAuthUserInfo, ":")
+	// schemaRegistryClient.SetCredentials(credentials[0], credentials[1])
 
 	consumer, err := kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers":  props["bootstrap.servers"],
